@@ -15,9 +15,9 @@
 #import "SBJsonWriter.h"
 #import "VTWebServiceClient.h"
 
-@implementation VTWebServiceClient
+static void *GMContext = &GMContext;
 
-@synthesize sessionName;
+@implementation VTWebServiceClient
 
 -(id)init
 {
@@ -30,9 +30,22 @@
 {
     if (self=[super init])
     {
-        serverURL = url;
+        _serverURL = url;
+//        [self addObserver:self forKeyPath:@"sessionName" options:NSKeyValueObservingOptionNew context:GMContext];
     }
     return self;
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
+{
+    if (context == GMContext) {
+        if ([keyPath isEqualToString:@"sessionName"]) {
+            NSLog(@"sessionName changed: %@", change);
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"sessionNameChanged" object:change];
+        }
+    } else {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+    }
 }
 
 - (NSDictionary *)doChallenge:(NSString *)userName
@@ -48,14 +61,15 @@
 {
     NSDictionary *postDict = [NSDictionary dictionaryWithObjectsAndKeys:
                               @"create", @"operation", 
-                              sessionName, @"sessionName", 
+                              _sessionName, @"sessionName",
                               elementType, @"elementType", 
                               [self writeJSON:elementDict], @"element",
                               nil];
     if ([elementType isEqual:@"Documents"]) {
-        NSString *fileName = [elementDict objectForKey:@"filename"];
-        NSData *fileData = [NSData dataWithContentsOfFile:fileName];
-        return [self doPostFile:postDict fileData:fileData];
+        NSString *filePath = [elementDict objectForKey:@"filename"];
+        NSString *fileName = [filePath lastPathComponent];
+        NSData *fileData = [NSData dataWithContentsOfFile:filePath];
+        return [self doPostFile:postDict fileData:fileData fileName:fileName];
     } else {
         return [self doPost:postDict];
     }
@@ -63,7 +77,7 @@
 
 - (NSDictionary *)doGet:(NSDictionary *)getDict
 {
-    NSString *urlString = [[NSString alloc] initWithFormat:@"%@\?%@", [serverURL absoluteString], [getDict urlEncodedString]];
+    NSString *urlString = [[NSString alloc] initWithFormat:@"%@/?%@", [_serverURL absoluteString], [getDict urlEncodedString]];
 	NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString]];
     [urlRequest setCachePolicy:NSURLRequestReloadIgnoringCacheData];
     NSData *responseData = [NSURLConnection sendSynchronousRequest:urlRequest returningResponse:nil error:nil];
@@ -81,7 +95,7 @@
                               md5Hash, @"accessKey",
                               nil];
     NSDictionary *loginDict = [self doPost:postDict];
-    sessionName = [[loginDict objectForKey:@"result"] objectForKey:@"sessionName"];
+    _sessionName = [[loginDict objectForKey:@"result"] objectForKey:@"sessionName"];
     return loginDict;
 }
 
@@ -89,7 +103,7 @@
 {
     NSString *postString = [postDict urlEncodedString];
     NSData *postData = [postString dataUsingEncoding:NSUTF8StringEncoding];
-	NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:serverURL];
+	NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:_serverURL];
     [urlRequest setCachePolicy:NSURLRequestReloadIgnoringCacheData];
 	[urlRequest setHTTPBody:postData];
 	[urlRequest setHTTPMethod:@"POST"];
@@ -98,7 +112,7 @@
     return [self parseResponse:responseData];
 }
 
-- (NSDictionary *)doPostFile:(NSDictionary *)postDict fileData:(NSData *)fileData
+- (NSDictionary *)doPostFile:(NSDictionary *)postDict fileData:(NSData *)fileData fileName:(NSString*)fileName
 {
 	NSString *boundary = @"quaixai2eezoo5nut0yo9aenuikab7Ko";
     NSMutableData *postData = [NSMutableData dataWithCapacity:[fileData length] + 1024];
@@ -108,10 +122,10 @@
         [postData appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"%@\"\n\n%@\n", keyString, valueString] dataUsingEncoding:NSUTF8StringEncoding]];
         [postData appendData:[[NSString stringWithFormat:@"--%@\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
     }
-    [postData appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"filename\"; filename=\"%@\"\n\n", @"image.png"] dataUsingEncoding:NSUTF8StringEncoding]];
+    [postData appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"filename\"; filename=\"%@\"\n\n", fileName] dataUsingEncoding:NSUTF8StringEncoding]];
     [postData appendData:fileData];
     [postData appendData:[[NSString stringWithFormat:@"\n--%@--\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:serverURL];
+    NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:_serverURL];
     [urlRequest setCachePolicy:NSURLRequestReloadIgnoringCacheData];
 	[urlRequest setHTTPBody:postData];
 	[urlRequest setHTTPMethod:@"POST"];

@@ -10,17 +10,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #import <Foundation/Foundation.h>
 
-@interface VTWebServiceClient : NSObject {
-    NSString *sessionName;
-    NSURL *serverURL;
-}
+@interface VTWebServiceClient : NSObject
+
 @property(nonatomic,retain) NSString *sessionName;
-@property(nonatomic,retain) NSString *serverURL;
+@property(nonatomic,retain) NSURL *serverURL;
 
 -(id)init;
 -(id)initWithURL:(NSURL *)url;
 
 -(NSDictionary *)doCreate:(NSString *)elementType elementDict:(NSDictionary *)elementDict;
 -(NSDictionary *)doLogin:(NSString *)userName accessKey:(NSString *)accessKey;
+-(NSDictionary *)doGet:(NSDictionary *)getDict;
 
 @end
